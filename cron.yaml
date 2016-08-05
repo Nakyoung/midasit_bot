@@ -1,0 +1,5 @@
+cron:
+- description: daily dinner check 
+  url: /dinner
+  schedule: every 30 mins
+  timezone: Asia/Seoul
