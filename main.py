@@ -5,6 +5,8 @@
 # description: http://bakyeono.net/post/2015-08-24-using-telegram-bot-api.html
 # github:      https://github.com/bakyeono/using-telegram-bot-api
 #
+import sys
+sys.path.append('/home/nykim/google_appengine/')
 
 # 구글 앱 엔진 라이브러리 로드
 from google.appengine.api import urlfetch
@@ -19,6 +21,7 @@ import logging
 import re
 import time
 from datetime import date
+from datetime import timedelta 
 
 # 봇 토큰, 봇 API 주소
 TOKEN = '239557605:AAFPnfm4zOJ6XFK2nByTxdVQZza3WmPbr4E'
@@ -47,6 +50,7 @@ USAGE = u"""[사용법] 아래 명령어를 메시지로 보내거나 버튼을 
 """
 MSG_START = u'봇을 시작합니다.'
 MSG_STOP  = u'봇을 정지합니다.'
+MSG_BOT_POSTFIX = u' sent from midasit_bot'
 
 # 커스텀 키보드
 CUSTOM_KEYBOARD = [
@@ -191,7 +195,18 @@ def cmd_echo(chat_id, text, reply_to):
 # http://erp.midasit.com/main_food_ok.asp?c_date=2016-08-04&c_code=nykim&OX=X
 def ask_dinner():
     d = date.today()
-    msg = u'즐거운 아침입니다. 오늘(' + d.isoformat() + u') 저녁식사 하실건가요? sent from midasit_bot'
+    day = d.weekday()
+    logging.info(d.isoformat())
+    logging.info(day)
+
+    if day == 5 or day == 6: # Sat. or Sun.
+        return
+    
+    msg = u'즐거운 아침입니다. 오늘(' + d.isoformat() + u') 저녁식사 하실건가요?' + MSG_BOT_POSTFIX
+    if day == 4: # Fri.
+        d = d + timedelta(days=1)
+        msg = u'즐거운 불금아침입니다. 내일(' + d.isoformat() + u') 점심식사 하실건가요?' + MSG_BOT_POSTFIX
+
     for chat in get_enabled_chats():
         send_msg(chat.key.string_id(), msg, keyboard = CUSTOM_KEYBOARD_YESNO)
         NDB_SerivceEnableStatus.status = STATUS_DINNER
@@ -201,6 +216,9 @@ def process_dinner(chat_id, text):
     data = {}
     d = date.today()
     data['c_date'] = d.isoformat()
+    if d.weekday() == 4: # Fri.
+        d = d + timedelta(days=1)
+        data['c_date'] = d.isoformat()
     logging.info(NDB_Account.id)
     account = NDB_Account.get_by_id('midasAccount')
     logging.info(account)
@@ -219,7 +237,7 @@ def process_dinner(chat_id, text):
     logging.info(full_url)
     urllib2.urlopen(full_url)
     NDB_SerivceEnableStatus.status = STATUS_IDLE
-    send_msg(chat_id, u'식수체크 ㄳㄳ', keyboard = CUSTOM_KEYBOARD)
+    send_msg(chat_id, u'식수체크 ㄳㄳ' + MSG_BOT_POSTFIX, keyboard = CUSTOM_KEYBOARD)
 
 def process_cmds(msg):
     u"""사용자 메시지를 분석해 봇 명령을 처리

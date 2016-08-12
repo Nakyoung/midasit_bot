@@ -2,4 +2,5 @@ cron:
 - description: daily dinner check 
   url: /dinner
   schedule: every mon,tue,wed,thu,fri 07:00
+#  schedule: every 2 mins
   timezone: Asia/Seoul
