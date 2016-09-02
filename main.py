@@ -110,14 +110,15 @@ def registerAccount(chat_id, user_id):
     send_msg(chat_id, u'아이디가 등록됨')
 
 def test_func(msg):
-    query = NDB_Account.query(NDB_SerivceEnableStatus.enabled == True)
-    return query.fetch()
     msg_id = msg['message_id']
     chat_id = msg['chat']['id']
     text = msg.get('text')
     logging.info(chat_id)
     for chat in get_enabled_chats():
         logging.info(chat)
+        account = NDB_Account.get_by_id(str(chat_id))
+        logging.info(account.id)
+        logging.info(account.name)
         #send_msg(chat.key.string_id(), text + u' << broadcasted by ' + str(chat_id))
     pass
 
