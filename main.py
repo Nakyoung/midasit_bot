@@ -20,8 +20,37 @@ import json
 import logging
 import re
 import time
-from datetime import date
+from datetime import date, tzinfo
 from datetime import timedelta 
+
+from datetime import tzinfo, timedelta, datetime
+
+ZERO = timedelta(0)
+HOUR = timedelta(hours=1)
+class UTC(tzinfo):
+    """UTC"""
+    def utcoffset(self, dt):
+        return ZERO
+    def tzname(self, dt):
+        return "UTC"
+    def dst(self, dt):
+        return ZERO
+
+utc = UTC()
+
+class TimeZoneOffset(tzinfo):
+    def __init__(self, hours, name):
+        self.__offset = timedelta(hours = hours)
+        self.__name = name
+
+    def utcoffset(self, dt):
+        return self.__offset
+
+    def tzname(self, dt):
+        return self.__name
+
+    def dst(self, dt):
+        return ZERO
 
 # 봇 토큰, 봇 API 주소
 TOKEN = '239557605:AAFPnfm4zOJ6XFK2nByTxdVQZza3WmPbr4E'
@@ -35,6 +64,7 @@ CMD_BROADCAST = '/broadcast'
 CMD_BROADCAST_SHORTCUT = '/bc'
 CMD_REGISTER_ID = '/register'
 CMD_QUERY_ID = '/query'
+CMD_TEST = '/test'
 
 # 봇 상태
 STATUS_IDLE = 'IDLE'
@@ -74,14 +104,28 @@ def registerAccount(chat_id, user_id):
     # - wait for passwd or quit
 
     # DB 인스턴스에 저장
-    instance = NDB_Account.get_or_insert('midasAccount')
+    instance = NDB_Account.get_or_insert(str(chat_id))
     instance.id = user_id
     instance.put()
     send_msg(chat_id, u'아이디가 등록됨')
 
+def test_func(msg):
+    query = NDB_Account.query(NDB_SerivceEnableStatus.enabled == True)
+    return query.fetch()
+    msg_id = msg['message_id']
+    chat_id = msg['chat']['id']
+    text = msg.get('text')
+    logging.info(chat_id)
+    for chat in get_enabled_chats():
+        logging.info(chat)
+        #send_msg(chat.key.string_id(), text + u' << broadcasted by ' + str(chat_id))
+    pass
 
 def queryAccount(chat_id):
-    account = NDB_Account.get_by_id('midasAccount')
+    account = NDB_Account.get_by_id(str(chat_id))
+    if account == None:
+        send_msg(chat_id, u'등록된 아이디가 없습니다')
+        return
     send_msg(chat_id, u'등록된 아이디는 ' + account.id)
 
 # 채팅별 봇 활성화 상태
@@ -194,7 +238,8 @@ def cmd_echo(chat_id, text, reply_to):
 #def cmd_midas_check_dinner(chat_id, text, )
 # http://erp.midasit.com/main_food_ok.asp?c_date=2016-08-04&c_code=nykim&OX=X
 def ask_dinner():
-    d = date.today()
+    d = datetime.today().replace(tzinfo=utc)
+    d = d.astimezone(tz=TimeZoneOffset(9, "KST")).date();
     day = d.weekday()
     logging.info(d.isoformat())
     logging.info(day)
@@ -202,10 +247,10 @@ def ask_dinner():
     if day == 5 or day == 6: # Sat. or Sun.
         return
     
-    msg = u'즐거운 아침입니다. 오늘(' + d.isoformat() + u') 저녁식사 하실건가요?' + MSG_BOT_POSTFIX
+    msg = u'아름다운 밤입니다. 오늘(' + d.isoformat() + u') 저녁식사 하실건가요?' + MSG_BOT_POSTFIX
     if day == 4: # Fri.
         d = d + timedelta(days=1)
-        msg = u'즐거운 불금아침입니다. 내일(' + d.isoformat() + u') 점심식사 하실건가요?' + MSG_BOT_POSTFIX
+        msg = u'즐거운 불금입니다. 내일-토요일(' + d.isoformat() + u') 점심식사 하실건가요?' + MSG_BOT_POSTFIX
 
     for chat in get_enabled_chats():
         send_msg(chat.key.string_id(), msg, keyboard = CUSTOM_KEYBOARD_YESNO)
@@ -214,13 +259,15 @@ def ask_dinner():
 def process_dinner(chat_id, text):
     # http://erp.midasit.com/main_food_ok.asp?c_date=2016-08-09&c_code=nykim&OX=X
     data = {}
-    d = date.today()
+    #d = date.today()
+    d = datetime.today().replace(tzinfo=utc)
+    d = d.astimezone(tz=TimeZoneOffset(9, "KST")).date();
     data['c_date'] = d.isoformat()
     if d.weekday() == 4: # Fri.
         d = d + timedelta(days=1)
         data['c_date'] = d.isoformat()
     logging.info(NDB_Account.id)
-    account = NDB_Account.get_by_id('midasAccount')
+    account = NDB_Account.get_by_id(str(chat_id))
     logging.info(account)
     data['c_code'] = account.id
 
@@ -248,15 +295,14 @@ def process_cmds(msg):
     chat_id = msg['chat']['id']
     text = msg.get('text')
 
-    logging.info(type(SELECT_DINNER_NOT))
-    logging.info(type(text))
-
-
     if (not text):
         return
     if (NDB_SerivceEnableStatus.status == STATUS_DINNER and 
             (SELECT_DINNER_EAT == text or SELECT_DINNER_NOT == text)):
         process_dinner(chat_id, text)
+        return
+    if CMD_TEST == text:
+        test_func(msg)
         return
     if CMD_QUERY_ID == text:
         queryAccount(chat_id)
